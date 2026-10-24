@@ -1,0 +1,5 @@
+/target
+.vscode/
+.idea/
+*.m3u
+*.m3u8

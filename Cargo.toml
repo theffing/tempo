@@ -1,0 +1,17 @@
+[package]
+name = "tempo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29"
+rodio = { version = "0.19", default-features = false, features = ["symphonia-mp3", "symphonia-flac", "symphonia-wav", "symphonia-vorbis"] }
+mp3-duration = "0.1"
+rfd = "0.15"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
