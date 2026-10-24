@@ -12,7 +12,6 @@ use std::{
 const ACCENT: Color32 = Color32::from_rgb(29, 185, 84);
 const EXTS: [&str; 4] = ["mp3", "flac", "wav", "ogg"];
 const W: f32 = 300.0;
-const MIN_W: f32 = 220.0;
 const H_COMPACT: f32 = 105.0;
 const H_LIST: f32 = 320.0;
 
@@ -234,6 +233,18 @@ fn small_button(text: &str) -> egui::Button<'static> {
     egui::Button::new(RichText::new(text.to_owned()).size(11.0).color(Color32::GRAY)).frame(false)
 }
 
+fn load_icon() -> egui::IconData {
+    let img = image::load_from_memory(include_bytes!("../icon.png"))
+        .expect("bad icon")
+        .into_rgba8();
+    let (width, height) = img.dimensions();
+    egui::IconData {
+        rgba: img.into_raw(),
+        width,
+        height,
+    }
+}
+
 impl eframe::App for Player {
     fn clear_color(&self, _: &egui::Visuals) -> [f32; 4] {
         egui::Rgba::TRANSPARENT.to_array()
@@ -292,67 +303,71 @@ impl eframe::App for Player {
                 ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
             }
 
-            // Title row: scrolling title, then List, 📂, - and X
+            // Title row: buttons pinned to the right, scrolling title fills the rest
             ui.horizontal(|ui| {
-                let w = (ui.available_width() - 120.0).max(20.0);
-                let (rect, r) =
-                    ui.allocate_exact_size(egui::vec2(w, 18.0), egui::Sense::drag());
-                if r.drag_started() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
-                }
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    // Added right to left, so they appear as: List 📂 - X
+                    if ui.add(egui::Button::new("X").frame(false)).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+                    if ui.add(egui::Button::new("-").frame(false)).clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    }
+                    if ui.add(egui::Button::new("📂").frame(false)).clicked() {
+                        open_dialog = true;
+                    }
+                    let list_color = if self.show_list { ACCENT } else { Color32::GRAY };
+                    if ui
+                        .add(
+                            egui::Button::new(RichText::new("List").size(12.0).color(list_color))
+                                .frame(false),
+                        )
+                        .clicked()
+                    {
+                        toggle_list = true;
+                    }
 
-                let galley = ui.painter().layout_no_wrap(
-                    self.title(),
-                    egui::FontId::proportional(13.0),
-                    Color32::WHITE,
-                );
-                let painter = ui.painter().with_clip_rect(rect);
-                let y = rect.center().y - galley.size().y / 2.0;
-                let text_w = galley.size().x;
+                    // Title takes whatever space is left
+                    let w = ui.available_width().max(20.0);
+                    let (rect, r) =
+                        ui.allocate_exact_size(egui::vec2(w, 18.0), egui::Sense::drag());
+                    if r.drag_started() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+                    }
 
-                if text_w <= rect.width() {
-                    painter.galley(egui::pos2(rect.min.x, y), galley, Color32::WHITE);
-                } else {
-                    scrolling = true;
-                    let gap = 40.0;
-                    let cycle = text_w + gap;
-                    let speed = 35.0; // pixels per second
-                    let pause = 1.5; // seconds
-                    let t = (ui.input(|i| i.time) - self.title_t0) as f32;
-                    let period = pause + cycle / speed;
-                    let phase = t % period;
-                    let off = if phase < pause { 0.0 } else { (phase - pause) * speed };
-                    painter.galley(
-                        egui::pos2(rect.min.x - off, y),
-                        galley.clone(),
+                    let galley = ui.painter().layout_no_wrap(
+                        self.title(),
+                        egui::FontId::proportional(13.0),
                         Color32::WHITE,
                     );
-                    painter.galley(
-                        egui::pos2(rect.min.x - off + cycle, y),
-                        galley,
-                        Color32::WHITE,
-                    );
-                }
+                    let painter = ui.painter().with_clip_rect(rect);
+                    let y = rect.center().y - galley.size().y / 2.0;
+                    let text_w = galley.size().x;
 
-                let list_color = if self.show_list { ACCENT } else { Color32::GRAY };
-                if ui
-                    .add(
-                        egui::Button::new(RichText::new("List").size(12.0).color(list_color))
-                            .frame(false),
-                    )
-                    .clicked()
-                {
-                    toggle_list = true;
-                }
-                if ui.add(egui::Button::new("📂").frame(false)).clicked() {
-                    open_dialog = true;
-                }
-                if ui.add(egui::Button::new("-").frame(false)).clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
-                }
-                if ui.add(egui::Button::new("X").frame(false)).clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Close);
-                }
+                    if text_w <= rect.width() {
+                        painter.galley(egui::pos2(rect.min.x, y), galley, Color32::WHITE);
+                    } else {
+                        scrolling = true;
+                        let gap = 40.0;
+                        let cycle = text_w + gap;
+                        let speed = 35.0; // pixels per second
+                        let pause = 1.5; // seconds
+                        let t = (ui.input(|i| i.time) - self.title_t0) as f32;
+                        let period = pause + cycle / speed;
+                        let phase = t % period;
+                        let off = if phase < pause { 0.0 } else { (phase - pause) * speed };
+                        painter.galley(
+                            egui::pos2(rect.min.x - off, y),
+                            galley.clone(),
+                            Color32::WHITE,
+                        );
+                        painter.galley(
+                            egui::pos2(rect.min.x - off + cycle, y),
+                            galley,
+                            Color32::WHITE,
+                        );
+                    }
+                });
             });
 
             // Seek bar
@@ -452,8 +467,7 @@ impl eframe::App for Player {
         if toggle_list {
             self.show_list = !self.show_list;
             let h = if self.show_list { H_LIST } else { H_COMPACT };
-            let w = ctx.screen_rect().width().max(MIN_W);
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(W, h)));
         }
 
         if open_dialog {
@@ -475,11 +489,11 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([W, H_COMPACT])
-            .with_min_inner_size([MIN_W, H_COMPACT])
             .with_decorations(false)
             .with_transparent(true)
-            .with_resizable(true)
-            .with_always_on_top(),
+            .with_resizable(false)
+            .with_always_on_top()
+            .with_icon(load_icon()),
         ..Default::default()
     };
 

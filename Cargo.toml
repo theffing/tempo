@@ -8,6 +8,10 @@ eframe = "0.29"
 rodio = { version = "0.19", default-features = false, features = ["symphonia-mp3", "symphonia-flac", "symphonia-wav", "symphonia-vorbis"] }
 mp3-duration = "0.1"
 rfd = "0.15"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[build-dependencies]
+winresource = "0.1"
 
 [profile.release]
 opt-level = "z"
