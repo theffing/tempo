@@ -12,6 +12,7 @@ use std::{
 const ACCENT: Color32 = Color32::from_rgb(29, 185, 84);
 const EXTS: [&str; 4] = ["mp3", "flac", "wav", "ogg"];
 const W: f32 = 300.0;
+const MIN_W: f32 = 220.0;
 const H_COMPACT: f32 = 105.0;
 const H_LIST: f32 = 320.0;
 
@@ -280,9 +281,20 @@ impl eframe::App for Player {
             .inner_margin(12.0);
 
         egui::CentralPanel::default().frame(frame).show(ctx, |ui| {
-            // Title row: scrolling title (drag to move window), then List, 📂 and X
+            // Background drag area: added first, so every widget drawn after it
+            // takes priority and only empty space moves the window
+            let bg = ui.interact(
+                ui.max_rect().expand(12.0),
+                ui.id().with("bg_drag"),
+                egui::Sense::drag(),
+            );
+            if bg.drag_started() {
+                ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
+            }
+
+            // Title row: scrolling title, then List, 📂, - and X
             ui.horizontal(|ui| {
-                let w = (ui.available_width() - 96.0).max(20.0);
+                let w = (ui.available_width() - 120.0).max(20.0);
                 let (rect, r) =
                     ui.allocate_exact_size(egui::vec2(w, 18.0), egui::Sense::drag());
                 if r.drag_started() {
@@ -335,6 +347,9 @@ impl eframe::App for Player {
                 if ui.add(egui::Button::new("📂").frame(false)).clicked() {
                     open_dialog = true;
                 }
+                if ui.add(egui::Button::new("-").frame(false)).clicked() {
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                }
                 if ui.add(egui::Button::new("X").frame(false)).clicked() {
                     ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                 }
@@ -343,7 +358,7 @@ impl eframe::App for Player {
             // Seek bar
             let total = self.total.as_secs_f32().max(0.1);
             let mut secs = self.pos().as_secs_f32();
-            ui.spacing_mut().slider_width = ui.available_width() - 70.0;
+            ui.spacing_mut().slider_width = (ui.available_width() - 70.0).max(20.0);
             ui.horizontal(|ui| {
                 let r = ui.add(egui::Slider::new(&mut secs, 0.0..=total).show_value(false));
                 if r.drag_stopped() || (r.changed() && !r.dragged()) {
@@ -437,7 +452,8 @@ impl eframe::App for Player {
         if toggle_list {
             self.show_list = !self.show_list;
             let h = if self.show_list { H_LIST } else { H_COMPACT };
-            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(W, h)));
+            let w = ctx.screen_rect().width().max(MIN_W);
+            ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(egui::vec2(w, h)));
         }
 
         if open_dialog {
@@ -459,9 +475,10 @@ fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([W, H_COMPACT])
+            .with_min_inner_size([MIN_W, H_COMPACT])
             .with_decorations(false)
             .with_transparent(true)
-            .with_resizable(false)
+            .with_resizable(true)
             .with_always_on_top(),
         ..Default::default()
     };
